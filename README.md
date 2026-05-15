@@ -1,5 +1,10 @@
 # acp-claude-pty
 
+[![CI](https://github.com/CarriedWorldUniverse/acp-claude-pty/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CarriedWorldUniverse/acp-claude-pty/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/CarriedWorldUniverse/acp-claude-pty?include_prereleases&sort=semver&display_name=tag)](https://github.com/CarriedWorldUniverse/acp-claude-pty/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/CarriedWorldUniverse/acp-claude-pty.svg)](https://pkg.go.dev/github.com/CarriedWorldUniverse/acp-claude-pty)
+[![License](https://img.shields.io/github/license/CarriedWorldUniverse/acp-claude-pty)](LICENSE)
+
 A PTY driver and ACP server for the Claude Code CLI, in one Go binary.
 
 `acp-claude-pty` spawns `claude` (the official interactive CLI) inside a
