@@ -1,0 +1,10 @@
+/acp-claude-pty
+/acp-claude-pty.exe
+/bin/
+/dist/
+*.test
+*.out
+*.log
+.DS_Store
+.idea/
+.vscode/
