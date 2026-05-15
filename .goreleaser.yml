@@ -1,0 +1,58 @@
+version: 2
+
+project_name: acp-claude-pty
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: acp-claude-pty
+    main: ./cmd/acp-claude-pty
+    binary: acp-claude-pty
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/CarriedWorldUniverse/acp-claude-pty/internal/version.Version={{.Version}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format: tar.gz
+    files:
+      - README*
+      - LICENSE*
+      - NOTICE*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-next'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: CarriedWorldUniverse
+    name: acp-claude-pty
+  draft: false
+  prerelease: auto
+  name_template: '{{ .ProjectName }} {{ .Tag }}'

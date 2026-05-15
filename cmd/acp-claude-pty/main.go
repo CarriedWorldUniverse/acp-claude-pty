@@ -22,13 +22,20 @@ import (
 
 	"github.com/CarriedWorldUniverse/acp-claude-pty/internal/acpserver"
 	"github.com/CarriedWorldUniverse/acp-claude-pty/internal/pty"
+	"github.com/CarriedWorldUniverse/acp-claude-pty/internal/version"
 )
 
 func main() {
 	cwd := flag.String("cwd", "", "spawn directory for claude (required)")
 	command := flag.String("command", "claude", "claude binary to launch")
 	logPath := flag.String("log", "", "path to write a stdout-log copy of every PTY byte (optional)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("acp-claude-pty %s\n", version.Version)
+		return
+	}
 
 	if *cwd == "" {
 		fmt.Fprintln(os.Stderr, "acp-claude-pty: --cwd is required")
