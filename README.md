@@ -96,8 +96,7 @@ internal/acpserver/   ACP frame <-> PTY operation mapping
 internal/pty/         PTY driver (spawn, I/O loop, prompt detector, errors)
 internal/spawndir/    spawn-directory materialization
 internal/mockclaude/  fake-claude library (used by cmd/mockclaude)
-testdata/sessions/    recorded session fixtures (populated by NEX-87)
-test/                 replay harness, ACP conformance, integration (NEX-87)
+internal/version/     build-version reporting (--version)
 ```
 
 ## Testing
