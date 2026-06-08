@@ -29,6 +29,7 @@ func main() {
 	cwd := flag.String("cwd", "", "spawn directory for claude (required)")
 	command := flag.String("command", "claude", "claude binary to launch")
 	logPath := flag.String("log", "", "path to write a stdout-log copy of every PTY byte (optional)")
+	acceptTrust := flag.Bool("accept-workspace-trust", true, "auto-accept claude's folder-trust dialog on launch (the caller controls --cwd, so trust is implied); set false to leave the dialog for the caller")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -43,8 +44,9 @@ func main() {
 	}
 
 	opts := pty.Options{
-		Command: *command,
-		Cwd:     *cwd,
+		Command:              *command,
+		Cwd:                  *cwd,
+		AcceptWorkspaceTrust: *acceptTrust,
 	}
 	if *logPath != "" {
 		f, err := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
