@@ -1,17 +1,28 @@
 package pty
 
-import "testing"
+import (
+	_ "embed"
+	"testing"
+)
+
+// realTrustDialog is the raw, pre-ANSI-strip PTY bytes captured from a real
+// claude (2.1.168) folder-trust dialog in a fresh spawn dir. Refresh it after a
+// claude version bump with:
+//
+//	go test -tags=capturetrust ./internal/pty/ -run TestCaptureTrustDialog -v
+//
+//go:embed testdata/trust-dialog.raw
+var realTrustDialog []byte
 
 func TestTrustDialogVisible(t *testing.T) {
-	// Real claude renders the TUI without literal spaces (cursor positioning,
-	// not whitespace), so the detector must match the space-collapsed form —
-	// this is the exact shape captured from claude 2.1.168.
-	spaceless := []byte("Accessingworkspace:Quicksafetycheck:Isthisaprojectyoucreatedoroneyoutrust?1.Yes,Itrustthisfolder2.No,exit")
-	if !trustDialogVisible(spaceless) {
-		t.Error("did not detect the space-collapsed trust dialog (real-claude shape)")
+	// Pinned to REAL captured bytes, run through the same StripANSI the driver
+	// applies. The TUI renders with cursor-positioning (not literal spaces), so
+	// this is the genuine production input — not a hand-written approximation.
+	if !trustDialogVisible(StripANSI(realTrustDialog)) {
+		t.Errorf("did not detect the real captured trust dialog.\nstripped: %q", StripANSI(realTrustDialog))
 	}
 
-	// Spaced form (e.g. from a future render or a fixture) must also match.
+	// Spaced form (e.g. a future render) must also match.
 	if !trustDialogVisible([]byte("Quick safety check: ... trust this folder?")) {
 		t.Error("did not detect the spaced trust dialog")
 	}
