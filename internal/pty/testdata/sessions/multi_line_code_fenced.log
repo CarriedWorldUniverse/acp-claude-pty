@@ -1,0 +1,8 @@
+]0;✳ welcome]0;⠂ …Here is a snippet:
+
+```go
+func main() {
+	fmt.Println("hi")
+}
+```
+]0;✳ done

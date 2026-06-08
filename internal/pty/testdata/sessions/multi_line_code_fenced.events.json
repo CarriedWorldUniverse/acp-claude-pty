@@ -1,0 +1,32 @@
+{
+  "prompt_returned": true,
+  "events": [
+    {
+      "type": "line",
+      "line": "Here is a snippet:"
+    },
+    {
+      "type": "line"
+    },
+    {
+      "type": "line",
+      "line": "```go"
+    },
+    {
+      "type": "line",
+      "line": "func main() {"
+    },
+    {
+      "type": "line",
+      "line": "\tfmt.Println(\"hi\")"
+    },
+    {
+      "type": "line",
+      "line": "}"
+    },
+    {
+      "type": "line",
+      "line": "```"
+    }
+  ]
+}
