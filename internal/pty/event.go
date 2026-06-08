@@ -45,6 +45,22 @@ func NewLineEvent(at time.Time, line string) LineEvent {
 	return LineEvent{eventBase: newBase(at), Line: line}
 }
 
+// AssistantMessage carries the turn's assistant text sourced from claude's
+// session JSONL transcript (the structured truth), not the human TUI. Emitted
+// once at turn end when the session file is available, after the LineEvents.
+// This is the clean content channel — free of spinner/status chrome and the
+// CR-overwrite fragments the TUI stream carries; consumers should prefer it
+// for content and treat LineEvents as raw diagnostics.
+type AssistantMessage struct {
+	eventBase
+	Text string
+}
+
+// NewAssistantMessage constructs an AssistantMessage stamped with at (or Now).
+func NewAssistantMessage(at time.Time, text string) AssistantMessage {
+	return AssistantMessage{eventBase: newBase(at), Text: text}
+}
+
 // CompactStart fires when claude begins a /compact operation. While a
 // CompactStart is in flight (i.e. before the matching CompactEnd), the
 // driver suppresses its idle-silence backstop so the long-running compact
