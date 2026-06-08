@@ -60,22 +60,34 @@ func TestLive_RealClaude_Turn(t *testing.T) {
 	}
 
 	var out strings.Builder
+	var assistant string
 	for ev := range turn.Events {
-		if le, ok := ev.(LineEvent); ok {
-			out.WriteString(le.Line)
+		switch e := ev.(type) {
+		case LineEvent:
+			out.WriteString(e.Line)
 			out.WriteByte('\n')
+		case AssistantMessage:
+			assistant = e.Text
 		}
 	}
-	got := out.String()
-	t.Logf("=== live turn output ===\n%s========================", got)
+	t.Logf("=== raw TUI lines ===\n%s========================", out.String())
+	t.Logf("=== clean assistant text (JSONL) ===\n%s\n====================================", assistant)
 
 	if err := turn.Err(); err != nil {
-		t.Fatalf("turn terminated with error: %v\noutput so far:\n%s", err, got)
+		t.Fatalf("turn terminated with error: %v\noutput so far:\n%s", err, out.String())
 	}
-	if strings.TrimSpace(got) == "" {
-		t.Fatal("turn completed but emitted no output lines")
+
+	// The JSONL-sourced AssistantMessage is the clean content channel: it must
+	// carry the answer and none of the TUI chrome the raw line stream has.
+	if strings.TrimSpace(assistant) == "" {
+		t.Fatal("no AssistantMessage emitted — JSONL-sourced turn text missing")
 	}
-	if !strings.Contains(strings.ToUpper(got), "PONG") {
-		t.Logf("note: output did not contain PONG — claude may have formatted differently, but a turn completed cleanly")
+	if !strings.Contains(strings.ToUpper(assistant), "PONG") {
+		t.Errorf("clean assistant text missing PONG: %q", assistant)
+	}
+	for _, chrome := range []string{"Pondering", "esc to interrupt", "[cleared]", "tokens)", "running sp hook"} {
+		if strings.Contains(assistant, chrome) {
+			t.Errorf("clean assistant text leaked TUI chrome %q: %q", chrome, assistant)
+		}
 	}
 }

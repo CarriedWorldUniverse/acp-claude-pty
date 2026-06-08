@@ -121,9 +121,30 @@ func (s *Server) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptRes
 		return acp.PromptResponse{}, err
 	}
 
-	// Stream events as agent_message_chunks in wire-order.
+	// Prefer the JSONL-sourced AssistantMessage for content (clean,
+	// chrome-free); buffer the raw TUI LineEvents only as a fallback for
+	// turns where the transcript was unavailable. Effect events flow
+	// through dispatchEvent unchanged.
+	var lineBuf strings.Builder
+	var sentClean bool
 	for ev := range turn.Events {
-		s.dispatchEvent(ctx, p.SessionId, ev)
+		switch e := ev.(type) {
+		case pty.AssistantMessage:
+			sentClean = true
+			s.sendAgentText(ctx, p.SessionId, e.Text)
+		case pty.LineEvent:
+			if e.Line != "" {
+				lineBuf.WriteString(e.Line)
+				lineBuf.WriteByte('\n')
+			}
+		default:
+			s.dispatchEvent(ctx, p.SessionId, ev)
+		}
+	}
+	if !sentClean {
+		if strings.TrimSpace(lineBuf.String()) != "" {
+			s.sendAgentText(ctx, p.SessionId, lineBuf.String())
+		}
 	}
 
 	if turnErr := turn.Err(); turnErr != nil {
@@ -132,30 +153,34 @@ func (s *Server) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptRes
 	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 }
 
+// sendAgentText emits text as an ACP agent_message_chunk. No-op on empty text.
+func (s *Server) sendAgentText(ctx context.Context, sessionID acp.SessionId, text string) {
+	if s.conn == nil || text == "" {
+		return
+	}
+	_ = s.conn.SessionUpdate(ctx, acp.SessionNotification{
+		SessionId: sessionID,
+		Update:    acp.UpdateAgentMessageText(text),
+	})
+}
+
 // dispatchEvent maps a driver Event to an ACP session_update notification.
 func (s *Server) dispatchEvent(ctx context.Context, sessionID acp.SessionId, ev pty.Event) {
 	if s.conn == nil {
 		return
 	}
 	switch e := ev.(type) {
-	case pty.LineEvent:
-		if e.Line == "" {
-			return
-		}
-		_ = s.conn.SessionUpdate(ctx, acp.SessionNotification{
-			SessionId: sessionID,
-			Update:    acp.UpdateAgentMessageText(e.Line + "\n"),
-		})
 	case pty.CompactStart, pty.CompactEnd, pty.CompactSummaryAvailable, pty.Cleared,
 		pty.ModelChanged, pty.EffortChanged, pty.SessionExiting:
 		// Tagged effect events carry no ACP-standard mapping yet; surface
-		// them as agent_message_chunks tagged with the type so callers
-		// inspecting the stream don't lose ordering. A richer mapping
-		// (e.g. as resource_links or custom Meta keys) is a follow-up
-		// once plumb's slash-command output fixtures land.
+		// them as agent_THOUGHT chunks (not agent_message) so callers
+		// inspecting the stream keep ordering, but the effect text stays
+		// OUT of the assistant message content (FinalText). A richer mapping
+		// (e.g. as resource_links or custom Meta keys) is a follow-up once
+		// plumb's slash-command output fixtures land.
 		_ = s.conn.SessionUpdate(ctx, acp.SessionNotification{
 			SessionId: sessionID,
-			Update:    acp.UpdateAgentMessageText(formatEffect(e) + "\n"),
+			Update:    acp.UpdateAgentThoughtText(formatEffect(e)),
 		})
 	}
 }

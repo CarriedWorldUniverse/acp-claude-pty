@@ -107,6 +107,14 @@ type Driver struct {
 	ptyFile *os.File // master side of the PTY; nil before Start, after Stop
 	waitCh  chan error
 	chunks  <-chan readChunk // populated in Start; consumed by Send
+
+	// sessionFile is claude's JSONL transcript for this spawn (located at
+	// Start); sessionOffset is how far we have read it. Used to source the
+	// clean per-turn assistant text from the structured transcript instead
+	// of the TUI. Empty sessionFile = transcript not found, callers fall
+	// back to LineEvents.
+	sessionFile   string
+	sessionOffset int64
 }
 
 // New constructs a Driver. It does not start the process; call Start.
@@ -363,9 +371,61 @@ func (d *Driver) Send(ctx context.Context, input string) (*Turn, error) {
 		turn.errMu.Lock()
 		turn.err = err
 		turn.errMu.Unlock()
+
+		// Source the clean turn text from claude's JSONL transcript and
+		// emit it as the final event, after the raw LineEvents. Consumers
+		// prefer this for content; LineEvents remain as diagnostics.
+		if text := d.readTurnText(); text != "" {
+			out <- NewAssistantMessage(time.Now(), text)
+		}
 	}()
 
 	return turn, nil
+}
+
+// readTurnText reads the assistant text appended to the session transcript
+// since the last turn, advancing the read offset. Returns "" if no transcript
+// was located or no assistant text has landed yet (briefly retried to cover
+// claude's write-flush lag after the prompt returns).
+func (d *Driver) readTurnText() string {
+	d.stateMu.RLock()
+	file := d.sessionFile
+	offset := d.sessionOffset
+	d.stateMu.RUnlock()
+
+	if file == "" {
+		// claude writes the transcript on the first turn, not at session
+		// init, so locate it lazily here (cheap once cached). opts is
+		// immutable after New, so reading Cwd without the lock is safe.
+		if file = findSessionFile(d.opts.Cwd, 2*time.Second); file == "" {
+			return ""
+		}
+		d.stateMu.Lock()
+		d.sessionFile = file
+		d.stateMu.Unlock()
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		text, newOffset, err := readAssistantTextSince(file, offset)
+		if err == nil && text != "" {
+			d.stateMu.Lock()
+			d.sessionOffset = newOffset
+			d.stateMu.Unlock()
+			return text
+		}
+		if !time.Now().Before(deadline) {
+			// Advance past whatever we did read (e.g. a tool-only turn) so
+			// the next turn starts clean.
+			if err == nil && newOffset != offset {
+				d.stateMu.Lock()
+				d.sessionOffset = newOffset
+				d.stateMu.Unlock()
+			}
+			return text
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // Restart stops and re-starts the underlying process, materializing a fresh
