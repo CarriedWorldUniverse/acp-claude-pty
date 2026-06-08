@@ -34,13 +34,17 @@ caller (ACP client)  <-- stdio -->  acp-claude-pty  <-- PTY -->  claude
 ### Run it
 
 ```
-acp-claude-pty --cwd /path/to/spawn-dir [--command claude] [--log run.log]
+acp-claude-pty --cwd /path/to/spawn-dir [--command claude] [--log run.log] [--accept-workspace-trust=false]
 ```
 
 - `--cwd` (required) — the directory `claude` is launched in. Place
   `CLAUDE.md`, `.mcp.json`, `.claude/settings.json`, and any caller-supplied
   files here. The `internal/spawndir` package can materialize them for you.
 - `--command` (default `claude`) — the claude binary to spawn.
+- `--accept-workspace-trust` (default `true`) — auto-accept claude's
+  folder-trust dialog on launch. The caller controls `--cwd`, so trust is
+  implied; a fresh spawn dir would otherwise wedge on the dialog. Set
+  `false` to leave it for the caller. See "Subscription billing".
 - `--log` (optional) — capture every PTY byte (pre-ANSI-strip) for
   debugging.
 
