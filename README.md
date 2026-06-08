@@ -87,6 +87,22 @@ Driver errors are typed:
 launches its TUI regardless of model validity and only surfaces the failure
 when a turn is attempted.
 
+## Subscription billing (interactive only)
+
+This adapter exists to hold an **interactive** Claude session, which stays on the
+Pro/Max subscription. From **2026-06-15** Anthropic bills headless `claude -p` /
+Agent-SDK usage against a separate API-rate credit pool — so two guards keep the
+spawned session on the subscription rather than silently falling onto API
+billing:
+
+- **`-p`/`--print` is rejected** at `New()` — headless mode is Agent-SDK-billed
+  and emits no REPL prompt for the detector anyway.
+- **API-billing env vars are stripped** before exec — `ANTHROPIC_API_KEY`,
+  `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_BEDROCK`,
+  `CLAUDE_CODE_USE_VERTEX` — so an inherited API key can't flip the interactive
+  session onto API billing. Set `Options.PreserveAPIEnv` to opt out (when API
+  billing is intended).
+
 ## Layout
 
 ```

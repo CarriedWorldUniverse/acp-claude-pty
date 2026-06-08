@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,8 +19,17 @@ type Options struct {
 	// (interactive REPL). Callers MUST NOT pass "-p" — the driver requires
 	// the interactive REPL.
 	Args []string
-	// Env is the process environment. If nil, os.Environ() is used.
+	// Env is the process environment. If nil, os.Environ() is used. Either
+	// way, API-billing env vars are stripped before exec unless
+	// PreserveAPIEnv is set (see PreserveAPIEnv / env.go).
 	Env []string
+	// PreserveAPIEnv keeps the API-billing environment variables
+	// (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL,
+	// CLAUDE_CODE_USE_BEDROCK, CLAUDE_CODE_USE_VERTEX) in the child's
+	// environment. Default false: they are stripped so the interactive
+	// session authenticates via the Claude subscription (OAuth) rather than
+	// API-metered billing. Set true only when API billing is intended.
+	PreserveAPIEnv bool
 	// Cwd is the spawn directory the process runs in. Required.
 	Cwd string
 
@@ -96,6 +106,15 @@ func New(opts Options) (*Driver, error) {
 	if opts.Cwd == "" {
 		return nil, errors.New("pty: Options.Cwd is required")
 	}
+	// The driver REQUIRES the interactive REPL: headless print mode would be
+	// billed against the Agent-SDK credit pool (from 2026-06-15), not the
+	// subscription, and emits no REPL prompt for the detector. Reject it
+	// structurally rather than relying on the doc comment.
+	for _, a := range opts.Args {
+		if a == "-p" || a == "--print" || strings.HasPrefix(a, "-p=") || strings.HasPrefix(a, "--print=") {
+			return nil, errors.New("pty: interactive REPL required; -p/--print is not allowed (headless mode is Agent-SDK billed, not subscription)")
+		}
+	}
 	if opts.Command == "" {
 		opts.Command = "claude"
 	}
@@ -142,11 +161,17 @@ func (d *Driver) startLocked(ctx context.Context) error {
 
 	cmd := exec.CommandContext(ctx, d.opts.Command, d.opts.Args...)
 	cmd.Dir = d.opts.Cwd
-	if d.opts.Env != nil {
-		cmd.Env = d.opts.Env
-	} else {
-		cmd.Env = os.Environ()
+	env := d.opts.Env
+	if env == nil {
+		env = os.Environ()
 	}
+	if !d.opts.PreserveAPIEnv {
+		// Guarantee the interactive session uses the Claude subscription
+		// (OAuth), not API-metered billing via an inherited API key /
+		// gateway / cloud-provider override (see env.go).
+		env = stripBillingEnv(env)
+	}
+	cmd.Env = env
 
 	ptyFile, err := startInPTY(cmd, d.opts.Rows, d.opts.Cols)
 	if err != nil {
