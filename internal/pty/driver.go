@@ -30,6 +30,14 @@ type Options struct {
 	// session authenticates via the Claude subscription (OAuth) rather than
 	// API-metered billing. Set true only when API billing is intended.
 	PreserveAPIEnv bool
+	// AcceptWorkspaceTrust, when true, makes Start auto-accept claude's
+	// folder-trust dialog if it appears on launch in an untrusted spawn dir
+	// (it sends Enter to confirm the highlighted "Yes, I trust this folder").
+	// Without it, a fresh spawn dir wedges the REPL: the trust dialog can't be
+	// answered by a Send (the prompt text corrupts the 1/2/Enter menu) and no
+	// session flag skips it. The caller created/controls the spawn dir, so
+	// accepting trust is implied. No-op for already-trusted dirs.
+	AcceptWorkspaceTrust bool
 	// Cwd is the spawn directory the process runs in. Required.
 	Cwd string
 
@@ -191,7 +199,82 @@ func (d *Driver) startLocked(ctx context.Context) error {
 	d.started = true
 	d.stateMu.Unlock()
 
+	if d.opts.AcceptWorkspaceTrust {
+		if err := d.acceptWorkspaceTrust(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// acceptWorkspaceTrust handles claude's folder-trust dialog, which appears on
+// first launch in a directory claude does not yet trust and otherwise wedges
+// the REPL (it can't be answered by a Send, and no session flag skips it).
+// It watches the startup output and, if the dialog appears, sends Enter to
+// accept the highlighted "Yes, I trust this folder", then waits for the REPL
+// to settle (a busy→idle title transition). No-op if no dialog appears within
+// the detect window — the directory is already trusted. Caller holds startMu
+// and must invoke this before any Send (it reads d.chunks directly).
+func (d *Driver) acceptWorkspaceTrust(ctx context.Context) error {
+	const detectWindow = 8 * time.Second
+	const settleWindow = 20 * time.Second
+	timer := time.NewTimer(detectWindow)
+	defer timer.Stop()
+
+	var seen []byte
+	accepted := false
+	det := NewTitlePromptDetector()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			// No dialog within the detect window (already trusted), or the
+			// REPL has settled after accept. Either way, ready to proceed.
+			return nil
+		case chunk, ok := <-d.chunks:
+			if !ok {
+				return &DriverError{Kind: ErrCrash, Detail: "pty closed during workspace-trust prime"}
+			}
+			if chunk.err != nil {
+				if errors.Is(chunk.err, io.EOF) {
+					return &DriverError{Kind: ErrGracefulEOF, Cause: chunk.err}
+				}
+				return &DriverError{Kind: ErrCrash, Detail: "pty read during workspace-trust prime", Cause: chunk.err}
+			}
+			if !accepted {
+				seen = append(seen, StripANSI(chunk.bytes)...)
+				if trustDialogVisible(seen) {
+					if _, err := d.ptyFile.Write([]byte("\r")); err != nil {
+						return &DriverError{Kind: ErrCrash, Detail: "accept workspace trust", Cause: err}
+					}
+					accepted = true
+					det.Reset()
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(settleWindow)
+				}
+				continue
+			}
+			// Post-accept: the dialog clears, claude loads, and the REPL
+			// settles at the idle prompt — a busy→idle title transition.
+			if det.Feed(chunk.bytes) {
+				return nil
+			}
+		}
+	}
+}
+
+// trustDialogVisible reports whether the stripped startup output shows claude's
+// folder-trust dialog. The TUI renders without literal spaces (cursor
+// positioning, not whitespace), so it matches stable phrases against
+// whitespace-stripped, lowercased text.
+func trustDialogVisible(stripped []byte) bool {
+	norm := strings.ToLower(strings.Join(strings.Fields(string(stripped)), ""))
+	return strings.Contains(norm, "trustthisfolder") || strings.Contains(norm, "quicksafetycheck")
 }
 
 // Turn is the handle returned by Send. Callers drain Events until it
