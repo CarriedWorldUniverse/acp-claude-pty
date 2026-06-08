@@ -3,11 +3,18 @@ package pty
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestClaudeProjectDir_Encoding(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// The driver is macOS/Linux-only (Windows ConPTY is v2); these
+		// cases assume unix absolute paths, which filepath.Abs rewrites
+		// with a drive letter on Windows.
+		t.Skip("encoding test assumes unix paths")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("no home dir")
