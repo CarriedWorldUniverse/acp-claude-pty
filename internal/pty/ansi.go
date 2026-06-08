@@ -24,3 +24,71 @@ var ansiPattern = regexp.MustCompile(
 func StripANSI(b []byte) []byte {
 	return ansiPattern.ReplaceAll(b, nil)
 }
+
+type ansiStreamState uint8
+
+const (
+	ansiNormal ansiStreamState = iota
+	ansiEsc
+	ansiCSI
+	ansiOSC
+	ansiOSCEsc
+	ansiCharset
+)
+
+// ansiStreamStripper removes terminal control sequences from an incremental
+// byte stream. It handles the same pragmatic subset as StripANSI, but keeps
+// enough state to strip sequences split across reads.
+type ansiStreamStripper struct {
+	state ansiStreamState
+}
+
+func (s *ansiStreamStripper) Strip(chunk []byte) []byte {
+	out := make([]byte, 0, len(chunk))
+	for _, b := range chunk {
+		switch s.state {
+		case ansiNormal:
+			if b == 0x1b {
+				s.state = ansiEsc
+				continue
+			}
+			out = append(out, b)
+
+		case ansiEsc:
+			switch b {
+			case '[':
+				s.state = ansiCSI
+			case ']':
+				s.state = ansiOSC
+			case '(', ')':
+				s.state = ansiCharset
+			default:
+				s.state = ansiNormal
+			}
+
+		case ansiCSI:
+			if b >= 0x40 && b <= 0x7e {
+				s.state = ansiNormal
+			}
+
+		case ansiOSC:
+			switch b {
+			case 0x07:
+				s.state = ansiNormal
+			case 0x1b:
+				s.state = ansiOSCEsc
+			}
+
+		case ansiOSCEsc:
+			if b == '\\' {
+				s.state = ansiNormal
+			} else if b != 0x1b {
+				s.state = ansiOSC
+			}
+
+		case ansiCharset:
+			s.state = ansiNormal
+		}
+	}
+	return out
+}

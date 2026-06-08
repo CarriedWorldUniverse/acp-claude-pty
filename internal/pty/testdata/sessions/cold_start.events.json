@@ -1,0 +1,9 @@
+{
+  "prompt_returned": false,
+  "events": [
+    {
+      "type": "line",
+      "line": "Welcome to Claude Code"
+    }
+  ]
+}

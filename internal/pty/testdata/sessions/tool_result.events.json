@@ -1,0 +1,17 @@
+{
+  "prompt_returned": true,
+  "events": [
+    {
+      "type": "line",
+      "line": "tool_result: read_file"
+    },
+    {
+      "type": "line",
+      "line": "status: success"
+    },
+    {
+      "type": "line",
+      "line": "lines: 3"
+    }
+  ]
+}

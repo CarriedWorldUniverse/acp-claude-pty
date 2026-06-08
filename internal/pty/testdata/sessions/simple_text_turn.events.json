@@ -1,0 +1,9 @@
+{
+  "prompt_returned": true,
+  "events": [
+    {
+      "type": "line",
+      "line": "Hello from Claude."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "prompt_returned": true,
+  "events": [
+    {
+      "type": "line",
+      "line": "I will inspect the file."
+    },
+    {
+      "type": "line"
+    },
+    {
+      "type": "line",
+      "line": "tool_use: read_file"
+    },
+    {
+      "type": "line",
+      "line": "input: README.md"
+    }
+  ]
+}

@@ -63,6 +63,7 @@ type turnLoop struct {
 	hangTimeout   time.Duration
 
 	lineBuf bytes.Buffer
+	ansi    ansiStreamStripper
 }
 
 // runTurn drains chunks until the detector fires, the per-Send prompt
@@ -127,7 +128,7 @@ func (l *turnLoop) runTurn(ctx context.Context) error {
 // emitLines ANSI-strips chunk, accumulates bytes into the partial-line
 // buffer, and emits a LineEvent for each complete \n-terminated line.
 func (l *turnLoop) emitLines(at time.Time, chunk []byte) {
-	stripped := StripANSI(chunk)
+	stripped := l.ansi.Strip(chunk)
 	for _, b := range stripped {
 		if b == '\n' {
 			line := l.lineBuf.String()

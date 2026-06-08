@@ -1,0 +1,5 @@
+]0;✳ welcome]0;⠂ …I will inspect the file.
+
+tool_use: read_file
+input: README.md
+]0;✳ done
